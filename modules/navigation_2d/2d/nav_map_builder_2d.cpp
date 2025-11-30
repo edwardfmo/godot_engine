@@ -257,8 +257,8 @@ void NavMapBuilder2D::_build_step_edge_connection_margin_connections(NavMapItera
 
 			// The edges can now be connected.
 			Connection new_connection = other_edge;
-			new_connection.pathway_start = (self1 + other1) / 2.0;
-			new_connection.pathway_end = (self2 + other2) / 2.0;
+			new_connection.pathway_start = self1;
+			new_connection.pathway_end = self2;
 			//free_edge.polygon->connections.push_back(new_connection);
 
 			// Add the connection to the region_connection map.
