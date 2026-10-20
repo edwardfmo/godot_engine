@@ -105,6 +105,27 @@ struct Polygon {
 	real_t surface_area = 0.0;
 };
 
+/// One validated edge connection margin gap.
+///
+/// Both directed bridges for a gap are derived from this single canonical quad: the
+/// projection test in the builder is not symmetric for non-parallel edges, so running
+/// it per direction can yield different spans or accept only one direction.
+struct EdgeBridgeDescriptor {
+	Polygon *polygon_a = nullptr;
+	Polygon *polygon_b = nullptr;
+
+	/// Portal on `polygon_a`'s free edge.
+	Vector2 a1;
+	Vector2 a2;
+
+	/// Portal on `polygon_b`'s free edge, corresponding point-for-point with a1/a2.
+	Vector2 b1;
+	Vector2 b2;
+
+	/// Quad winding is a1 -> a2 -> b2 -> b1, validated simple and strictly convex.
+	real_t surface_area = 0.0;
+};
+
 struct NavigationPoly {
 	/// This poly.
 	const Polygon *poly = nullptr;

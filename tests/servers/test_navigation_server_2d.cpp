@@ -37,6 +37,7 @@ TEST_FORCE_LINK(test_navigation_server_2d)
 #ifdef MODULE_NAVIGATION_2D_ENABLED
 
 #include "core/object/callable_mp.h"
+#include "core/config/project_settings.h"
 #include "scene/2d/polygon_2d.h"
 #include "scene/main/scene_tree.h"
 #include "scene/main/window.h"
@@ -764,6 +765,145 @@ TEST_SUITE("[Navigation2D]") {
 		source_path.write[6] = Vector2(3.0, 5.0);
 		Vector<Vector2> simplified_path = NavigationServer2D::get_singleton()->simplify_path(source_path, simplify_epsilon);
 		CHECK_EQ(simplified_path.size(), 4);
+	}
+
+	TEST_CASE("[NavigationServer2D] Server should keep paths inside navigable space when stitching regions across a gap") {
+		NavigationServer2D *navigation_server = NavigationServer2D::get_singleton();
+
+		// Two regions whose facing edges overlap only partially and sit a gap apart, so
+		// that the straight line between start and target misses the stitched span.
+		const Rect2 region_a_rect = Rect2(-64, 0, 64, 192);
+		const Rect2 region_b_rect = Rect2(64, 64, 64, 64);
+		const Rect2 gap_rect = Rect2(0, 64, 64, 64);
+
+		const Vector2 start_position = Vector2(-56, 8);
+		const Vector2 target_position = Vector2(120, 100);
+
+		auto make_rect_region = [](const Rect2 &p_rect) {
+			Ref<NavigationPolygon> navigation_polygon;
+			navigation_polygon.instantiate();
+			PackedVector2Array vertices;
+			vertices.push_back(p_rect.position);
+			vertices.push_back(Vector2(p_rect.position.x + p_rect.size.x, p_rect.position.y));
+			vertices.push_back(p_rect.position + p_rect.size);
+			vertices.push_back(Vector2(p_rect.position.x, p_rect.position.y + p_rect.size.y));
+			navigation_polygon->set_vertices(vertices);
+			PackedInt32Array polygon_indices;
+			polygon_indices.push_back(0);
+			polygon_indices.push_back(1);
+			polygon_indices.push_back(2);
+			polygon_indices.push_back(3);
+			navigation_polygon->add_polygon(polygon_indices);
+			return navigation_polygon;
+		};
+
+		const bool initial_use_bridges = GLOBAL_GET("navigation/2d/use_edge_connection_bridges");
+		ProjectSettings::get_singleton()->set("navigation/2d/use_edge_connection_bridges", true);
+
+		RID map = navigation_server->map_create();
+		navigation_server->map_set_active(map, true);
+		navigation_server->map_set_use_async_iterations(map, false);
+		navigation_server->map_set_cell_size(map, 1.0);
+		navigation_server->map_set_edge_connection_margin(map, 70.0);
+
+		RID region_a = navigation_server->region_create();
+		RID region_b = navigation_server->region_create();
+		for (const RID &region : { region_a, region_b }) {
+			navigation_server->region_set_use_async_iterations(region, false);
+			navigation_server->region_set_use_edge_connections(region, true);
+			navigation_server->region_set_map(region, map);
+		}
+		navigation_server->region_set_navigation_polygon(region_a, make_rect_region(region_a_rect));
+		navigation_server->region_set_navigation_polygon(region_b, make_rect_region(region_b_rect));
+		navigation_server->physics_process(0.0); // Give server some cycles to commit.
+
+		SUBCASE("The two regions should be stitched by exactly one connection each") {
+			CHECK_EQ(navigation_server->region_get_connections_count(region_a), 1);
+			CHECK_EQ(navigation_server->region_get_connections_count(region_b), 1);
+		}
+
+		SUBCASE("Path should never leave the union of both regions and the stitched gap") {
+			Vector<Vector2> path = navigation_server->map_get_path(map, start_position, target_position, true);
+			REQUIRE_GT(path.size(), 1);
+			CHECK(path[0].is_equal_approx(start_position));
+
+			// Sampling the segments rather than only the corners: a funnel apex placed in
+			// the void shows up as a segment crossing unnavigable space, not as a bad corner.
+			const real_t tolerance = 0.01;
+			const int samples_per_segment = 32;
+			bool every_sample_navigable = true;
+			Vector2 first_bad_sample;
+
+			for (int point_index = 0; point_index + 1 < path.size(); point_index++) {
+				for (int sample = 0; sample <= samples_per_segment; sample++) {
+					const Vector2 sampled = path[point_index].lerp(path[point_index + 1], real_t(sample) / samples_per_segment);
+					const bool navigable =
+							region_a_rect.grow(tolerance).has_point(sampled) ||
+							region_b_rect.grow(tolerance).has_point(sampled) ||
+							gap_rect.grow(tolerance).has_point(sampled);
+					if (!navigable && every_sample_navigable) {
+						every_sample_navigable = false;
+						first_bad_sample = sampled;
+					}
+				}
+			}
+
+			INFO("First path sample outside navigable space: ", first_bad_sample);
+			CHECK(every_sample_navigable);
+		}
+
+		SUBCASE("Reverse path should mirror the forward path") {
+			Vector<Vector2> forward_path = navigation_server->map_get_path(map, start_position, target_position, true);
+			Vector<Vector2> reverse_path = navigation_server->map_get_path(map, target_position, start_position, true);
+			REQUIRE_GT(forward_path.size(), 1);
+			REQUIRE_EQ(reverse_path.size(), forward_path.size());
+
+			for (int point_index = 0; point_index < forward_path.size(); point_index++) {
+				CHECK(forward_path[point_index].is_equal_approx(reverse_path[reverse_path.size() - 1 - point_index]));
+			}
+		}
+
+		SUBCASE("Disabling the destination region should prevent reaching it") {
+			navigation_server->region_set_enabled(region_b, false);
+			navigation_server->physics_process(0.0); // Give server some cycles to commit.
+
+			Vector<Vector2> path = navigation_server->map_get_path(map, start_position, target_position, true);
+			for (const Vector2 &point : path) {
+				CHECK_FALSE(region_b_rect.grow(-0.01).has_point(point));
+			}
+
+			navigation_server->region_set_enabled(region_b, true);
+			navigation_server->physics_process(0.0); // Give server some cycles to commit.
+		}
+
+		SUBCASE("A query whose layer mask excludes the destination region should not reach it") {
+			navigation_server->region_set_navigation_layers(region_b, 2);
+			navigation_server->physics_process(0.0); // Give server some cycles to commit.
+
+			Ref<NavigationPathQueryParameters2D> query_parameters;
+			query_parameters.instantiate();
+			query_parameters->set_map(map);
+			query_parameters->set_start_position(start_position);
+			query_parameters->set_target_position(target_position);
+			query_parameters->set_navigation_layers(1);
+			Ref<NavigationPathQueryResult2D> query_result;
+			query_result.instantiate();
+			navigation_server->query_path(query_parameters, query_result);
+
+			for (const Vector2 &point : query_result->get_path()) {
+				CHECK_FALSE(region_b_rect.grow(-0.01).has_point(point));
+			}
+
+			navigation_server->region_set_navigation_layers(region_b, 1);
+			navigation_server->physics_process(0.0); // Give server some cycles to commit.
+		}
+
+		navigation_server->free_rid(region_a);
+		navigation_server->free_rid(region_b);
+		navigation_server->free_rid(map);
+		navigation_server->physics_process(0.0); // Give server some cycles to commit.
+
+		ProjectSettings::get_singleton()->set("navigation/2d/use_edge_connection_bridges", initial_use_bridges);
 	}
 }
 

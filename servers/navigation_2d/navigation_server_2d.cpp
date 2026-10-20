@@ -229,6 +229,7 @@ NavigationServer2D::NavigationServer2D() {
 
 	GLOBAL_DEF_BASIC(PropertyInfo(Variant::FLOAT, "navigation/2d/default_cell_size", PROPERTY_HINT_RANGE, NavigationDefaults2D::NAV_MESH_CELL_SIZE_HINT), NavigationDefaults2D::NAV_MESH_CELL_SIZE);
 	GLOBAL_DEF("navigation/2d/use_edge_connections", true);
+	GLOBAL_DEF("navigation/2d/use_edge_connection_bridges", false);
 	GLOBAL_DEF(PropertyInfo(Variant::FLOAT, "navigation/2d/merge_rasterizer_cell_scale", PROPERTY_HINT_RANGE, "0.001,1,0.001,or_greater"), 1.0);
 	GLOBAL_DEF_BASIC(PropertyInfo(Variant::FLOAT, "navigation/2d/default_edge_connection_margin", PROPERTY_HINT_RANGE, "0.01,10,0.001,or_greater"), NavigationDefaults2D::EDGE_CONNECTION_MARGIN);
 	GLOBAL_DEF_BASIC(PropertyInfo(Variant::FLOAT, "navigation/2d/default_link_connection_radius", PROPERTY_HINT_RANGE, "0.01,10,0.001,or_greater"), NavigationDefaults2D::LINK_CONNECTION_RADIUS);

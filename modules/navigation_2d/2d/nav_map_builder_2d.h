@@ -39,6 +39,7 @@ class NavMapBuilder2D {
 	static void _build_step_find_edge_connection_pairs(NavMapIterationBuild2D &r_build);
 	static void _build_step_merge_edge_connection_pairs(NavMapIterationBuild2D &r_build);
 	static void _build_step_edge_connection_margin_connections(NavMapIterationBuild2D &r_build);
+	static void _build_edge_bridge_polygons(NavMapIterationBuild2D &r_build);
 	static void _build_step_navlink_connections(NavMapIterationBuild2D &r_build);
 	static void _build_update_map_iteration(NavMapIterationBuild2D &r_build);
 

@@ -31,6 +31,7 @@
 #pragma once
 
 #include "../nav_utils_2d.h"
+#include "nav_edge_bridge_iteration_2d.h"
 #include "nav_mesh_queries_2d.h"
 
 #include "core/math/math_defs.h"
@@ -45,6 +46,7 @@ struct NavMapIteration2D;
 struct NavMapIterationBuild2D {
 	Vector2 merge_rasterizer_cell_size;
 	bool use_edge_connections = true;
+	bool use_edge_connection_bridges = false;
 	real_t edge_connection_margin;
 	real_t link_connection_radius;
 	Nav2D::PerformanceData performance_data;
@@ -53,6 +55,7 @@ struct NavMapIterationBuild2D {
 
 	HashMap<Nav2D::EdgeKey, Nav2D::EdgeConnectionPair, Nav2D::EdgeKey> iter_connection_pairs_map;
 	LocalVector<Nav2D::Connection> iter_free_edges;
+	LocalVector<Nav2D::EdgeBridgeDescriptor> iter_edge_bridges;
 
 	NavMapIteration2D *map_iteration = nullptr;
 
@@ -63,6 +66,7 @@ struct NavMapIterationBuild2D {
 
 		iter_connection_pairs_map.clear();
 		iter_free_edges.clear();
+		iter_edge_bridges.clear();
 		polygon_count = 0;
 		free_edge_count = 0;
 
@@ -85,6 +89,8 @@ struct NavMapIteration2D {
 
 	LocalVector<Nav2D::Polygon> navlink_polygons;
 
+	LocalVector<Ref<NavEdgeBridgeIteration2D>> edge_bridge_iterations;
+
 	HashMap<NavRegion2D *, Ref<NavRegionIteration2D>> region_ptr_to_region_iteration;
 
 	LocalVector<NavMeshQueries2D::PathQuerySlot> path_query_slots;
@@ -99,6 +105,7 @@ struct NavMapIteration2D {
 		external_region_connections.clear();
 		navbases_polygons_external_connections.clear();
 		navlink_polygons.clear();
+		edge_bridge_iterations.clear();
 		region_ptr_to_region_iteration.clear();
 	}
 };

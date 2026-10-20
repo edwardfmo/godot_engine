@@ -313,6 +313,7 @@ void NavMap2D::_build_iteration() {
 
 	iteration_build.merge_rasterizer_cell_size = get_merge_rasterizer_cell_size();
 	iteration_build.use_edge_connections = get_use_edge_connections();
+	iteration_build.use_edge_connection_bridges = GLOBAL_GET_CACHED(bool, "navigation/2d/use_edge_connection_bridges");
 	iteration_build.edge_connection_margin = get_edge_connection_margin();
 	iteration_build.link_connection_radius = get_link_connection_radius();
 
